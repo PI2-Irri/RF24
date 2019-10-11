@@ -17,6 +17,8 @@ Session.vim
 *.dylib
 *.dylib.*
 .DS_Store
+._.DS_Store
+._library.json
 Makefile.inc
 utility/includes.h
 examples_linux/*
