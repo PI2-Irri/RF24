@@ -28,8 +28,8 @@ SPI::SPI():fd(-1), _spi_speed(RF24_SPIDEV_SPEED) {
 bool spiIsInitialized = 0;
 
 void SPI::begin(int busNo,uint32_t spi_speed){
-
-    if(spiIsInitialized){
+	
+	if(spiIsInitialized){
        return; 
     }
     
@@ -41,7 +41,6 @@ void SPI::begin(int busNo,uint32_t spi_speed){
 	char device[] = "/dev/spidev0.0";
 	device[11] += (busNo / 10) % 10;
 	device[13] += busNo % 10;
-
 	if(this->fd >=0) // check whether spi is already open
 	{
 		close(this->fd);

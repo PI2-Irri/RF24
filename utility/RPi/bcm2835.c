@@ -744,6 +744,13 @@ void bcm2835_spi_setDataMode(uint8_t mode)
     bcm2835_peri_set_bits(paddr, mode << 2, BCM2835_SPI0_CS_CPOL | BCM2835_SPI0_CS_CPHA);
 }
 
+void bcm2835_aux_spi_setDataMode(uint8_t mode)
+{
+    volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0/4;
+    bcm2835_peri_set_bits(cntl0, mode << 2, BCM2835_AUX_SPI_CNTL0_CPOL | BCM2835_AUX_SPI_CNTL0_CPHA_IN | BCM2835_AUX_SPI_CNTL0_CPHA_OUT);
+}
+
+
 /* Writes (and reads) a single byte to SPI */
 uint8_t bcm2835_spi_transfer(uint8_t value)
 {
@@ -763,14 +770,14 @@ uint8_t bcm2835_spi_transfer(uint8_t value)
 
     /* Maybe wait for TXD */
     while (!(bcm2835_peri_read(paddr) & BCM2835_SPI0_CS_TXD))
-	;
+    ;
 
     /* Write to FIFO, no barrier */
     bcm2835_peri_write_nb(fifo, bcm2835_correct_order(value));
 
     /* Wait for DONE to be set */
     while (!(bcm2835_peri_read_nb(paddr) & BCM2835_SPI0_CS_DONE))
-	;
+    ;
 
     /* Read any byte that was sent back by the slave while we sere sending to it */
     ret = bcm2835_correct_order(bcm2835_peri_read_nb(fifo));
@@ -781,48 +788,6 @@ uint8_t bcm2835_spi_transfer(uint8_t value)
     return ret;
 }
 
-/* Writes (and reads) an number of bytes to SPI */
-void bcm2835_spi_transfernb(char* tbuf, char* rbuf, uint32_t len)
-{
-    volatile uint32_t* paddr = bcm2835_spi0 + BCM2835_SPI0_CS/4;
-    volatile uint32_t* fifo = bcm2835_spi0 + BCM2835_SPI0_FIFO/4;
-    uint32_t TXCnt=0;
-    uint32_t RXCnt=0;
-
-    /* This is Polled transfer as per section 10.6.1
-    // BUG ALERT: what happens if we get interupted in this section, and someone else
-    // accesses a different peripheral? 
-    */
-
-    /* Clear TX and RX fifos */
-    bcm2835_peri_set_bits(paddr, BCM2835_SPI0_CS_CLEAR, BCM2835_SPI0_CS_CLEAR);
-
-    /* Set TA = 1 */
-    bcm2835_peri_set_bits(paddr, BCM2835_SPI0_CS_TA, BCM2835_SPI0_CS_TA);
-
-    /* Use the FIFO's to reduce the interbyte times */
-    while((TXCnt < len)||(RXCnt < len))
-    {
-        /* TX fifo not full, so add some more bytes */
-        while(((bcm2835_peri_read(paddr) & BCM2835_SPI0_CS_TXD))&&(TXCnt < len ))
-        {
-	    bcm2835_peri_write_nb(fifo, bcm2835_correct_order(tbuf[TXCnt]));
-	    TXCnt++;
-        }
-        /* Rx fifo not empty, so get the next received bytes */
-        while(((bcm2835_peri_read(paddr) & BCM2835_SPI0_CS_RXD))&&( RXCnt < len ))
-        {
-	    rbuf[RXCnt] = bcm2835_correct_order(bcm2835_peri_read_nb(fifo));
-	    RXCnt++;
-        }
-    }
-    /* Wait for DONE to be set */
-    while (!(bcm2835_peri_read_nb(paddr) & BCM2835_SPI0_CS_DONE))
-	;
-
-    /* Set TA = 0, and also set the barrier */
-    bcm2835_peri_set_bits(paddr, 0, BCM2835_SPI0_CS_TA);
-}
 
 /* Writes an number of bytes to SPI */
 void bcm2835_spi_writenb(const char* tbuf, uint32_t len)
@@ -880,6 +845,12 @@ void bcm2835_spi_chipSelect(uint8_t cs)
     volatile uint32_t* paddr = bcm2835_spi0 + BCM2835_SPI0_CS/4;
     /* Mask in the CS bits of CS */
     bcm2835_peri_set_bits(paddr, cs, BCM2835_SPI0_CS_CS);
+}
+
+void bcm2835_aux_spi_chipSelect(uint8_t cs)
+{
+    volatile uint32_t* cntl0 = bcm2835_spi1 + BCM2835_AUX_SPI_CNTL0_VAR_CS/4;
+    bcm2835_peri_set_bits(cntl0, cs, BCM2835_AUX_SPI_CNTL0_CS2_N);
 }
 
 void bcm2835_spi_setChipSelectPolarity(uint8_t cs, uint8_t active)
@@ -986,6 +957,57 @@ static uint32_t spi1_speed;
 void bcm2835_aux_spi_setClockDivider(uint16_t divider)
 {
 		spi1_speed = (uint32_t) divider;
+}
+
+
+/* Writes (and reads) an number of bytes to SPI */
+void bcm2835_spi_transfernb(char* tbuf, char* rbuf, uint32_t len)
+{
+    volatile uint32_t* paddr = bcm2835_spi0 + BCM2835_SPI0_CS/4;
+    volatile uint32_t* fifo = bcm2835_spi0 + BCM2835_SPI0_FIFO/4;
+    uint32_t TXCnt=0;
+    uint32_t RXCnt=0;
+
+    /* This is Polled transfer as per section 10.6.1
+    // BUG ALERT: what happens if we get interupted in this section, and someone else
+    // accesses a different peripheral? 
+    */
+
+    /* Clear TX and RX fifos */
+    bcm2835_peri_set_bits(paddr, BCM2835_SPI0_CS_CLEAR, BCM2835_SPI0_CS_CLEAR);
+
+    /* Set TA = 1 */
+    bcm2835_peri_set_bits(paddr, BCM2835_SPI0_CS_TA, BCM2835_SPI0_CS_TA);
+
+    /* Use the FIFO's to reduce the interbyte times */
+    while((TXCnt < len)||(RXCnt < len))
+    {
+        /* TX fifo not full, so add some more bytes */
+        while(((bcm2835_peri_read(paddr) & BCM2835_SPI0_CS_TXD))&&(TXCnt < len ))
+        {
+	    bcm2835_peri_write_nb(fifo, bcm2835_correct_order(tbuf[TXCnt]));
+	    TXCnt++;
+        }
+        /* Rx fifo not empty, so get the next received bytes */
+        while(((bcm2835_peri_read(paddr) & BCM2835_SPI0_CS_RXD))&&( RXCnt < len ))
+        {
+	    rbuf[RXCnt] = bcm2835_correct_order(bcm2835_peri_read_nb(fifo));
+	    RXCnt++;
+        }
+    }
+    /* Wait for DONE to be set */
+    while (!(bcm2835_peri_read_nb(paddr) & BCM2835_SPI0_CS_DONE))
+	;
+
+    /* Set TA = 0, and also set the barrier */
+    bcm2835_peri_set_bits(paddr, 0, BCM2835_SPI0_CS_TA);
+}
+
+/* Writes (and reads) a single byte to AUX SPI */
+uint8_t bcm2835_aux_spi_transfer(uint8_t value)
+{
+    bcm2835_aux_spi_transfern(&value, 1);
+    return value;
 }
 
 void bcm2835_aux_spi_write(uint16_t data)

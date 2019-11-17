@@ -46,7 +46,7 @@ using namespace std;
 //RF24 radio(RPI_V2_GPIO_P1_15, RPI_V2_GPIO_P1_24, BCM2835_SPI_SPEED_8MHZ);
 
 // RPi generic:
-RF24 radio(22,0);
+//RF24 radio(22,0);
 
 /*** RPi Alternate ***/
 //Note: Specify SPI BUS 0 or 1 instead of CS pin number.
@@ -56,7 +56,7 @@ RF24 radio(22,0);
 //RF24 radio(15,0);
 
 //RPi Alternate, with SPIDEV - Note: Edit RF24/arch/BBB/spi.cpp and  set 'this->device = "/dev/spidev0.0";;' or as listed in /dev
-//RF24 radio(22,0);
+RF24 radio(26,22);
 
 
 /****************** Linux (BBB,x86,etc) ***********************/
@@ -92,9 +92,10 @@ int main(int argc, char** argv){
 
   // Setup and configure rf radio
   radio.begin();
-
+  radio.setAutoAck(true);
   // optionally, increase the delay between retries & # of retries
   radio.setRetries(15,15);
+  radio.setPALevel(RF24_PA_LOW);
   // Dump the configuration of the rf unit for debugging
   radio.printDetails();
 

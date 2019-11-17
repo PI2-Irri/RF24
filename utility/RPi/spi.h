@@ -66,12 +66,13 @@ public:
 
 
 uint8_t SPI::transfer(uint8_t _data) {
-    uint8_t data = bcm2835_spi_transfer(_data);
+    // uint8_t data = bcm2835_spi_transfer(_data);
+    uint8_t data = bcm2835_aux_spi_transfer(_data); // spi_transfer for AUX SPI
     return data;
 }
 
 void SPI::transfernb(char* tbuf, char* rbuf, uint32_t len){
-   bcm2835_spi_transfernb( tbuf, rbuf, len);
+   bcm2835_aux_spi_transfernb( tbuf, rbuf, len);
 }
 
 void SPI::transfern(char* buf, uint32_t len)

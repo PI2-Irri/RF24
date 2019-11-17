@@ -1663,6 +1663,7 @@ extern "C" {
       see \ref bcm2835SPIMode
     */
     extern void bcm2835_spi_setDataMode(uint8_t mode);
+    extern void bcm2835_aux_spi_setDataMode(uint8_t mode);
 
     /*! Sets the chip select pin(s)
       When an bcm2835_spi_transfer() is made, the selected pin(s) will be asserted during the
@@ -1671,6 +1672,7 @@ extern "C" {
       One of BCM2835_SPI_CS*, see \ref bcm2835SPIChipSelect
     */
     extern void bcm2835_spi_chipSelect(uint8_t cs);
+    extern void bcm2835_aux_spi_chipSelect(uint8_t cs);
 
     /*! Sets the chip select pin polarity for a given pin
       When an bcm2835_spi_transfer() occurs, the currently selected chip select pin(s) 
@@ -1693,6 +1695,7 @@ extern "C" {
       \sa bcm2835_spi_transfern()
     */
     extern uint8_t bcm2835_spi_transfer(uint8_t value);
+    extern uint8_t bcm2835_aux_spi_transfer(uint8_t value);
     
     /*! Transfers any number of bytes to and from the currently selected SPI slave.
       Asserts the currently selected CS pins (as previously set by bcm2835_spi_chipSelect) 

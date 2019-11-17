@@ -38,7 +38,7 @@ void RF24::csn(bool mode)
 	// divider of 4 is the minimum we want.
 	// CLK:BUS 8Mhz:2Mhz, 16Mhz:4Mhz, or 20Mhz:5Mhz
 	
-      #if !defined (SOFTSPI)	
+     #if !defined (SOFTSPI)	
 		_SPI.setBitOrder(MSBFIRST);
 		_SPI.setDataMode(SPI_MODE0);
 		#if !defined(F_CPU) || F_CPU < 20000000
@@ -352,7 +352,7 @@ uint8_t RF24::spiTrans(uint8_t cmd){
   uint8_t status;
   
   beginTransaction();
-  status = _SPI.transfer( cmd );
+  status = _SPI.transfer( cmd ); //DDMDSDD
   endTransaction();
   
   return status;
@@ -607,7 +607,8 @@ bool RF24::begin(void)
 	    case 7: csn_pin = 1; break;
 	    case 18: csn_pin = 10; break;	//to make it work on SPI1
 	    case 17: csn_pin = 11; break;
-	    case 16: csn_pin = 12; break;
+	    case 16: csn_pin = 16; break;
+      case 22: csn_pin = 22; break;
 	    default: csn_pin = 0; break;
 	  }
     #endif
@@ -837,9 +838,13 @@ bool RF24::write( const void* buf, uint8_t len, const bool multicast )
 		uint32_t timer = millis();
 	#endif 
 	
-	while( ! ( get_status()  & ( _BV(TX_DS) | _BV(MAX_RT) ))) { 
-		#if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
+  //DDMDSDD
+	// printf("Status is %d \n", get_status());
+	while( ! ( get_status()  & ( _BV(TX_DS) | _BV(MAX_RT) ))) {
+  // while(( get_status()  & ( _BV(TX_DS) | _BV(MAX_RT) ))) { 
+    #if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if(millis() - timer > 95){			
+        printf("%d - Err in RF24::write!\n", get_status());
 				errNotify();
 				#if defined (FAILURE_HANDLING)
 				  return 0;		
@@ -886,6 +891,7 @@ bool RF24::writeBlocking( const void* buf, uint8_t len, uint32_t timeout )
 		}
 		#if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if(millis() - timer > (timeout+95) ){			
+        printf("err in RF24::writeBlocking!");
 				errNotify();
 				#if defined (FAILURE_HANDLING)
 				return 0;			
@@ -933,6 +939,7 @@ bool RF24::writeFast( const void* buf, uint8_t len, const bool multicast )
 		}
 		#if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if(millis() - timer > 95 ){			
+        printf("err in RF24::writeFast");
 				errNotify();
 				#if defined (FAILURE_HANDLING)
 				return 0;							
@@ -1007,6 +1014,7 @@ bool RF24::txStandBy(){
 		}
 		#if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if( millis() - timeout > 95){
+        printf("err in RF24::txStandBy");
 				errNotify();
 				#if defined (FAILURE_HANDLING)
 				return 0;	
@@ -1040,6 +1048,7 @@ bool RF24::txStandBy(uint32_t timeout, bool startTx){
 		}
 		#if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if( millis() - start > (timeout+95)){
+        printf("err in RF24::txStandBy");
 				errNotify();
 				#if defined (FAILURE_HANDLING)
 				return 0;	
