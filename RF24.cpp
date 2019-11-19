@@ -844,9 +844,9 @@ bool RF24::write( const void* buf, uint8_t len, const bool multicast )
   // while(( get_status()  & ( _BV(TX_DS) | _BV(MAX_RT) ))) { 
     #if defined (FAILURE_HANDLING) || defined (RF24_LINUX)
 			if(millis() - timer > 95){			
-        printf("%d - Err in RF24::write!\n", get_status());
 				errNotify();
 				#if defined (FAILURE_HANDLING)
+          printf("%d - Err in RF24::write!\n", get_status());
 				  return 0;		
 				#else
 				  delay(100);
