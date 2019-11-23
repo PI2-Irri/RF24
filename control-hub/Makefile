@@ -16,6 +16,6 @@ endif
 include ../Makefile.inc
 
 # define all programs
-PROGRAMS = central_demo
+PROGRAMS = central_demo central_hub
 
 include Makefile.controlHub

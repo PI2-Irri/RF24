@@ -1,24 +1,3 @@
-/*
- Copyright (C) 2011 J. Coliz <maniacbug@ymail.com>
-
- This program is free software; you can redistribute it and/or
- modify it under the terms of the GNU General Public License
- version 2 as published by the Free Software Foundation.
-
- 03/17/2013 : Charles-Henri Hallard (http://hallard.me)
-              Modified to use with Arduipi board http://hallard.me/arduipi
-						  Changed to use modified bcm2835 and RF24 library
-TMRh20 2014 - Updated to work with optimized RF24 Arduino library
-
- */
-
-/**
- * Example RF Radio Ping Pair
- *
- * This is an example of how to use the RF24 class on RPi, communicating to an Arduino running
- * the GettingStarted sketch.
- */
-
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
@@ -39,7 +18,7 @@ int main(int argc, char** argv){
 	radio.begin();
 	radio.setAutoAck(true);
 	radio.setDataRate(RF24_250KBPS);
-	radio.setPALevel(RF24_PA_LOW);
+	radio.setPALevel(RF24_PA_HIGH);
 	printf("\n ************ RF24: Control Hub Status ***********\n");
 	radio.printDetails();
 	printf("\n ************ RF24: END OF STATUS ***********\n");
