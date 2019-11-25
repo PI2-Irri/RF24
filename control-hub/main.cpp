@@ -67,8 +67,11 @@ vector<string> splitDelimiter(const string &str, char delimiter);
 ActuatorCommand actuatorCommandParser(const string &str);
 void configureRadio();
 void configurePipes();
+void signalHandler(int signum);
+void testControllerHub();
 
 // GLOBAL VARIABLES //
+bool testCHub = false;
 RF24 radio(26,22); // BCM 26 as nRF CE & BCM22 (SPI1 CE2) as nRF CSN 
 queue<ActuatorData> controllerHubData;
 queue<inGroundTag> inGroundData;
@@ -76,8 +79,11 @@ queue<inGroundTag> inGroundData;
 // ****************************   MAIN   **************************** 
 int main(int argc, char *argv[])
 {
-	bool begin_;
+	bool begin;
 	uint8_t pipe = 1;
+
+    //Catch Signal
+    signal(SIGTSTP, &signalHandler); // ^z to perform ControllerHub Test Routine
 
 	// Initialize Logger
     static plog::ColorConsoleAppender<plog::TxtFormatter> consoleAppender;
@@ -85,19 +91,35 @@ int main(int argc, char *argv[])
     PLOG_INFO << "IRRI says: Hello Log World!";
 
     // Radio Setup
-	radio.begin();
-	PLOG_INFO_IF(!begin_) << "configureRadio: RF24 started!";
-	PLOG_FATAL_IF(begin_) << "configureRadio: RF24 couldn't begin :(";
+	begin = radio.begin();
+	PLOG_INFO_IF(begin) << "configureRadio: RF24 started!";
+	PLOG_FATAL_IF(!begin) << "configureRadio: RF24 couldn't begin :(";
     configureRadio();
     configurePipes();
     radio.printDetails();
     radio.startListening();
 
-    // Iterate over pipes for incoming messages
     PLOG_INFO << "MAIN LOOP STARTED";
     while(1)
     {
-    	while(radio.available(&pipe))
+        // Failure Detection Routine
+        PLOG_FATAL_IF(radio.failureDetected) << "RF24 FAILED!!!!!";
+        if(radio.failureDetected)
+        {
+            radio.failureDetected = false;
+            // Perform Radio Setup
+            begin = radio.begin();
+            PLOG_INFO_IF(begin) << "RF24 started after failure!";
+            PLOG_FATAL_IF(!begin) << "RF24 couldn't begin after failure :((";
+            configureRadio();
+            configurePipes();
+            radio.printDetails();
+            radio.startListening();
+            PLOG_WARNING << "Radio reset successfuly after failureDetected.";  
+        }
+
+        // Iterate over pipes for incoming messages
+        while(radio.available(&pipe))
     	{
     		if(pipe == 1) // Message from ControllerHub
     		{
@@ -106,7 +128,7 @@ int main(int argc, char *argv[])
     		    radio.read(&rdata, sizeof(rdata));
     		    // Push message into Queue
     		    controllerHubData.push(rdata);
-    		    PLOG_VERBOSE << "ControllerHub Pipe " << pipe << ": Recv -" << rdata.water_comsumption << " litres and reservoir level is " << rdata.reservoir_level;
+    		    PLOG_VERBOSE << "ControllerHub Pipe " << (int) pipe << ": Recv: " << rdata.water_comsumption << " litres and reservoir level is " << (int) rdata.reservoir_level;
     		}
     		else if(pipe > 1 && pipe < 5) // Message from InGround Sensors
     		{
@@ -118,18 +140,52 @@ int main(int argc, char *argv[])
     		    rdata.tag = rtag;
     		    rdata.rfAdress = pipes[pipe];
     		    inGroundData.push(rdata);
-    		    PLOG_VERBOSE << "InGround Pipe " << pipe << ": Recv -" << rtag.moisture << "% RH, " << rtag.temperature << " Celsius and " << rtag.battery << "% battery";
+    		    PLOG_VERBOSE << "InGround Pipe " << (int) pipe << ": Recv: " << (int) rtag.moisture << "% RH, " << (int) rtag.temperature << " Celsius and " << (int) rtag.battery << "% battery";
     		}
     	}
-    	// Next Pipe...
+        delayMicroseconds(20);
+    	
+        // Next Pipe...
     	pipe += 1;
-    	pipe > 5 ? pipe = 1 : pipe = pipe; 
+    	pipe > 5 ? pipe = 1 : pipe = pipe;
+
+        // Check flag for ControllerHub Testing
+        if(testCHub)
+            testControllerHub();
+
+
     }
-
-
 	return 0;	
 }
 // ******************************************************************
+
+void testControllerHub()
+{
+    int status, timer;
+    struct ActuatorCommand cmd;
+    bool sent;
+
+    testCHub = false;
+    cout << "** SEND TO CONTROLLER HUB **\n";
+    cout << "Status (0-OFF / 1-ON) > ";
+    cin >> status;
+    cout << "Timer (s) > ";
+    cin >> timer;
+    cmd.status = (bool) status;
+    cmd.timer = (uint16_t) timer;
+    radio.stopListening();
+    sent = radio.write(&cmd, sizeof(cmd));
+    radio.startListening();
+    if(sent)
+        cout << "SENT.\n";
+    else
+        cout << "FAILED :(\n";
+}
+
+void signalHandler(int signum)
+{
+    testCHub = true;
+}
 
 //configureRadio: Configure RF24 radio
 void configureRadio()
@@ -145,9 +201,9 @@ void configureRadio()
 //configurePipes: Configure RF24 Pipes
 void configurePipes()
 {
-	radio.openWritingPipe(pipes[0]);
-	for(uint8_t i=0; i<6; i++)
+	for(uint8_t i=1; i<6; i++)
 		radio.openReadingPipe(i, pipes[i]);
+	radio.openWritingPipe(pipes[0]);
 }
 
 
