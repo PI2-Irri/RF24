@@ -9,23 +9,51 @@
 // FUNCTIONS
 void acquireFlowSensorData(bool printInSerial);
 void IRAM_ATTR pulseCounter();
+void configureRadio();
 void displayIrri();
 bool returnStatus();
 bool isEmpty();
 bool isFull();
 bool checkLevel(bool mustBeFull);
 
+//STRUCTS
+struct ActuatorCommand
+{
+    bool status;
+    uint16_t timer;
+};
+
+struct ActuatorData
+{
+    uint16_t water_comsumption;
+    uint8_t reservoir_level;
+};
+
 // RF24 Params
+/*
+* Pipes Description:
+* 0 - ControlHub to ControllerHub 
+* 1 - ControllerHub to ControlHub
+* 2 - InGround1 to ControlHub
+* 3 - InGround2 to ControlHub
+* 4 - InGround3 to ControlHub
+* 5 - ControlHub broadcast to InGround Sensors
+*/
+const uint64_t pipes[6] = 
+                    { 
+                    0xF0F0F0F0D2LL, 0xF0F0F0F0E1LL, 
+                    0xF0F0F0F0E2LL, 0xF0F0F0F0E3LL, 
+                    0xF0F0F0F0F1, 0xF0F0F0F0F2 
+                    };
 #define FAILURE_HANDLING
 bool radioNumber = 0;
 bool exitRoutine = 0;
-byte addresses[][6] = {"1Node","2Node"};
 RF24 radio(13,5); // CE 13 & CS 5
 
 // Sys Timer Params
-unsigned long rtimeCounter = 0;
-uint16_t rtime = 0;
-uint16_t elapsedTime = 0;
+unsigned long rtime;
+unsigned long rtimeCounter;
+unsigned long elapsedTime;
 
 // OLED Display Params
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -50,7 +78,7 @@ byte relayPin2 = 26;
 bool relayStatus1 = 1; // HIGH == OFF
 
 // Level Switches Params
-#define MUST_BE_FULL_TO_START 1
+#define MUST_BE_FULL_TO_START 0
 byte emptyLevelPin = 2; // Using GPIO 2
 byte fullLevelPin = 4; // Using GPIO 4
 
@@ -59,10 +87,10 @@ void setup()
     // Initialize printf library
     printf_begin();
     // Initialize serial com
-    Serial.begin(9600);
+    Serial.begin(115200);
     // Initialize OLED Display
     if(!disp.begin(SSD1306_SWITCHCAPVCC, 0x3C)) 
-        Serial.println(F("SSD1306 allocation failed"));
+        printf("SSD1306 allocation failed!!");
     disp.clearDisplay();
     disp.setTextSize(2);
     disp.setTextColor(WHITE);
@@ -82,24 +110,15 @@ void setup()
     digitalWrite(fullLevelPin, LOW);
 
     // Init RF24
+    configureRadio();
     radio.begin();
-    radio.setAutoAck(true);
-    radio.setDataRate(RF24_250KBPS);
-    radio.setPALevel(RF24_PA_LOW); 
-    Serial.println(F("****************************"));
-    Serial.println(F("RF24: Controller Hub Status"));
+    radio.openReadingPipe(1, pipes[0]);
+    radio.openWritingPipe(pipes[1]);
+    printf("****************************\n");
+    printf("RF24: Controller Hub Status\n");
     radio.printDetails();
-    Serial.println(F("RF24: END OF STATUS"));
-    Serial.println(F("****************************"));
-    // Open a writing and reading pipe on each radio, with opposite addresses
-    if(radioNumber){
-        radio.openWritingPipe(addresses[1]);
-        radio.openReadingPipe(1,addresses[0]);
-    }else{
-        radio.openWritingPipe(addresses[0]);
-        radio.openReadingPipe(1,addresses[1]);
-    }
-    // Start the radio listening for data
+    printf("RF24: END OF STATUS\n");
+    printf("****************************\n");
     radio.startListening();
 }
 
@@ -108,25 +127,26 @@ void loop()
     // Received messages while relay is inactive
     if (radio.available() & (relayStatus1 == HIGH))
     {
-        while(radio.available()) {
-            radio.read(&rtime, sizeof(uint16_t));
-        }
-        printf("Got payload (%d bytes). ON TIME - %d seconds...\n", sizeof(uint16_t), rtime);
+        struct ActuatorCommand command;
+        radio.read(&command, sizeof(command));
+        printf("Recv: Status - %d & Timer %d.\n", command.status, command.timer);
+
         // Reset values
         flowRate = 0; 
         flowLitres = 0;
         totalLitres = 0;
         pulseCount = 0;
         oldFlowTime = 0;
-        rtimeCounter = 0;
-        elapsedTime = 0;
         exitRoutine = 0;
         // Activate Relay & Attach Interrupt
-        if (checkLevel(MUST_BE_FULL_TO_START) & (rtime > 0))
+        if (checkLevel(MUST_BE_FULL_TO_START) & (command.status == true))
         {
             relayStatus1 = LOW; // LOW is ON
             digitalWrite(relayPin1, relayStatus1);
             attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
+            rtime = command.timer;
+            rtimeCounter = millis();
+            elapsedTime = 0;
         }
         else
         {
@@ -135,36 +155,35 @@ void loop()
         }
     } 
     else if (radio.available() & (relayStatus1 == LOW)) // Received messages while relay is active
-    {
-        uint16_t rRequest;
-        while(radio.available()) {
-            radio.read(&rRequest, sizeof(uint16_t));
-        }
-        if (rRequest == 0) // OFF Request is 0, otherwise ignore
+    { 
+        struct ActuatorCommand command;
+        radio.read(&command, sizeof(command)); 
+        printf("Recv: Status - %d & Timer %d.\n", command.status, command.timer);
+        if(command.status == false)
         {
             relayStatus1 = HIGH; // HIGH is OFF
             digitalWrite(relayPin1, relayStatus1);
             detachInterrupt(digitalPinToInterrupt(flowSensorPin));
-            printf("\nShutdown by Request!\n");
+            printf("\n SHUTDOWN BY USER REQUEST\n"); 
             exitRoutine = returnStatus();
-        }
+        } 
     }
 
     // Process Sys Timer if relay is active
     if (((millis() - rtimeCounter) > 1000) & (relayStatus1 == LOW))
     {
         elapsedTime += 1;
-        rtimeCounter = millis();
-        if (rtime - elapsedTime <= 0) // End of Sys Timer
+        if (elapsedTime == rtime)
         {
             relayStatus1 = HIGH; // HIGH is OFF
             digitalWrite(relayPin1, relayStatus1);
             detachInterrupt(digitalPinToInterrupt(flowSensorPin));
-            printf("\nTimer ended! Shutdown :)\n");
+            printf("\n TIMER ENDED\n"); 
             exitRoutine = returnStatus();
         }
+        rtimeCounter = millis();
     }
-
+     
     // Checking Water Level
     if (isEmpty() & (relayStatus1 == LOW))
     {
@@ -184,6 +203,17 @@ void loop()
 
     // OLED Display
     displayIrri();
+}
+
+//configureRadio: Configure RF24 radio
+void configureRadio()
+{
+    radio.setAutoAck(true);
+    radio.setDataRate(RF24_250KBPS);
+    radio.setPALevel(RF24_PA_HIGH);
+    radio.setChannel(76);
+    radio.setCRCLength(RF24_CRC_16);
+    radio.setRetries(5,15); // 5*250us delay with 15 retries
 }
 
 void acquireFlowSensorData(bool printInSerial)
@@ -236,18 +266,24 @@ bool checkLevel(bool mustBeFull)
 
 bool returnStatus()
 {
-    // Format Message
-    uint32_t msg;
-    msg = (uint32_t) elapsedTime << 16;
-    msg = msg + (uint32_t) round(totalLitres);
-    // Send Message
+    // Format Output Status
+    struct ActuatorData data;
+    data.water_comsumption = (uint16_t) totalLitres; 
+    if(isFull())
+        data.reservoir_level = 2;
+    else if(!isFull() && !isEmpty())
+        data.reservoir_level = 1;
+    else if(isEmpty())
+        data.reservoir_level = 0;
+    // Send to ControlHub
+    int ntry = 0;
+    bool sent = false;
     radio.stopListening();
-    bool sent = radio.write(&msg, sizeof(uint32_t));
-    if (sent)
-        printf("\nreturnStatus: SUCESS! \n");
-    else
-        printf("\nreturnStatus: FAIL! \n");
-    radio.startListening();
+    while((sent == false) && ntry < 10) // Try to send data for ntry times!
+    {
+        sent = radio.write(&data, sizeof(data));
+        ntry += 1;
+    }
     return sent;
 }
 
@@ -386,9 +422,9 @@ void displayIrri()
     {
         disp.drawBitmap(0, 32, clock_icon16x16, 16, 16, 1);
         disp.setCursor(20, 32);
-        disp.print(elapsedTime);
+        disp.print(elapsedTime); 
         disp.print("/");
-        disp.print(rtime);
+        disp.print(rtime); 
         disp.print(" s");
     }
     disp.setCursor(0, 50);
