@@ -51,9 +51,10 @@ struct ActuatorData
 
 struct ContextTag
 {
-  int moisture;
-  float temperature;
-  int battery;
+    int moisture;
+    float temperature;
+    int battery;
+    int timer;
 };
 
 struct inGroundTag
@@ -140,7 +141,7 @@ int main(int argc, char *argv[])
     		    rdata.tag = rtag;
     		    rdata.rfAdress = pipes[pipe];
     		    inGroundData.push(rdata);
-    		    PLOG_VERBOSE << "InGround Pipe " << (int) pipe << ": Recv: " << (int) rtag.moisture << "% RH, " << (int) rtag.temperature << " Celsius and " << (int) rtag.battery << "% battery";
+    		    PLOG_VERBOSE << "InGround Pipe " << (int) pipe << ": Recv: " << rtag.moisture << "% RH, " << rtag.temperature << " Celsius and " << rtag.battery << "% battery";
     		}
     	}
         delayMicroseconds(20);
