@@ -54,6 +54,7 @@ RF24 radio(13,5); // CE 13 & CS 5
 unsigned long rtime;
 unsigned long rtimeCounter;
 unsigned long elapsedTime;
+unsigned long ttimer;
 
 // OLED Display Params
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -110,8 +111,8 @@ void setup()
     digitalWrite(fullLevelPin, LOW);
 
     // Init RF24
-    configureRadio();
     radio.begin();
+    configureRadio();
     radio.openReadingPipe(1, pipes[0]);
     radio.openWritingPipe(pipes[1]);
     printf("****************************\n");
@@ -266,8 +267,10 @@ bool checkLevel(bool mustBeFull)
 
 bool returnStatus()
 {
-    // Format Output Status
     struct ActuatorData data;
+    bool sent;
+
+    printf("\nDispatch to ControlHub:\n");
     data.water_comsumption = (uint16_t) totalLitres; 
     if(isFull())
         data.reservoir_level = 2;
@@ -276,14 +279,16 @@ bool returnStatus()
     else if(isEmpty())
         data.reservoir_level = 0;
     // Send to ControlHub
-    int ntry = 0;
-    bool sent = false;
+    printf("stopListening - \n");
     radio.stopListening();
-    while((sent == false) && ntry < 10) // Try to send data for ntry times!
-    {
-        sent = radio.write(&data, sizeof(data));
-        ntry += 1;
-    }
+    printf("Writing....\n");
+    sent = radio.write(&data, sizeof(data));
+    if(sent)
+        printf("OK\n");
+    else
+        printf("FAIL\n");
+    radio.startListening();
+
     return sent;
 }
 

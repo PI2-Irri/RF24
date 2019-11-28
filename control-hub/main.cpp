@@ -164,7 +164,7 @@ void testControllerHub()
 {
     int status, timer;
     struct ActuatorCommand cmd;
-    bool sent;
+    bool sent = false;
 
     testCHub = false;
     cout << "** SEND TO CONTROLLER HUB **\n";
